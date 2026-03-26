@@ -5,6 +5,7 @@ __pycache__/
 # Env / secrets
 .env
 .env.*
+!.env.example
 
 # Node / Next
 node_modules/
