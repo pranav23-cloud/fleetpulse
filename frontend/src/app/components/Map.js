@@ -17,13 +17,18 @@ export default function Map({ vehicles }) {
     return "lightgreen";
   };
 
-  // 🔥 Pulsing effect (recommended way)
+  // 🔥 Pulsing effect
   const getRadius = (v) => {
     if (v.status === "CRITICAL") {
-      return 12 + Math.random() * 4; // dynamic pulse
+      return 12 + Math.random() * 4;
     }
     return 10;
   };
+
+  // ⚡ Extract recommended stations
+  const stations = vehicles
+    .filter(v => v.recommended_station)
+    .map(v => v.recommended_station);
 
   return (
     <MapContainer
@@ -33,11 +38,12 @@ export default function Map({ vehicles }) {
     >
       <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
 
+      {/* 🚗 VEHICLES */}
       {vehicles.map((v) => (
         <CircleMarker
           key={v.id}
           center={[v.lat, v.lng]}
-          radius={getRadius(v)}   // 👈 animated radius
+          radius={getRadius(v)}
           pathOptions={{
             color: getMarkerColor(v.status, v.temp),
             fillOpacity: v.status === "CRITICAL" ? 0.9 : 0.6,
@@ -57,6 +63,13 @@ export default function Map({ vehicles }) {
                 </span>
               </p>
 
+              {/* ⚡ NEW: Recommended station info */}
+              {v.recommended_station && (
+                <p style={{ color: "cyan", marginTop: "5px" }}>
+                  ⚡ Go to: {v.recommended_station.name} ({v.recommended_station.type})
+                </p>
+              )}
+
               {v.alert && (
                 <p style={{ color: "red", marginTop: "5px" }}>
                   {v.alert}
@@ -66,6 +79,24 @@ export default function Map({ vehicles }) {
           </Popup>
         </CircleMarker>
       ))}
+
+      {/* ⚡ CHARGING STATIONS (BLUE) */}
+      {stations.map((s, i) => (
+        <CircleMarker
+          key={"station-" + i}
+          center={[s.lat, s.lng]}
+          radius={8}
+          pathOptions={{
+            color: "blue",
+            fillOpacity: 0.8,
+          }}
+        >
+          <Popup>
+            ⚡ {s.name} ({s.type})
+          </Popup>
+        </CircleMarker>
+      ))}
+
     </MapContainer>
   );
 }
