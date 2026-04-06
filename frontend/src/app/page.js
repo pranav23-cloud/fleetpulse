@@ -10,7 +10,7 @@ export default function Home() {
 
   useEffect(() => {
     const fetchData = async () => {
-      const res = await fetch("https://fleetpulse-backend-c04w.onrender.com/vehicles");
+      const res = await fetch("http://127.0.0.1:8000/vehicles");
       const data = await res.json();
       setVehicles(data);
     };
