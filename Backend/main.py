@@ -1,6 +1,7 @@
 import random
 import os
 import requests
+import math
 from fastapi import FastAPI
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
@@ -32,6 +33,18 @@ for i in range(20):
         "driver_score": random.randint(1, 10)
     })
 
+# ⚡ Generate MANY charging stations (BETTER)
+charging_stations = []
+
+for i in range(15):
+    charging_stations.append({
+        "id": i,
+        "name": f"Station {i}",
+        "lat": 12.97 + random.uniform(-0.06, 0.06),
+        "lng": 77.59 + random.uniform(-0.06, 0.06),
+        "type": random.choice(["fast", "slow"])
+    })
+
 # 🌦️ Weather cache
 weather_cache = {}
 
@@ -40,8 +53,6 @@ def get_weather(lat, lng):
 
     if key in weather_cache:
         return weather_cache[key]
-
-    print("API CALL → Fetching weather...")
 
     url = f"http://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lng}&appid={API_KEY}&units=metric"
 
@@ -52,7 +63,6 @@ def get_weather(lat, lng):
 
         weather_cache[key] = temp
 
-        # limit cache size
         if len(weather_cache) > 50:
             weather_cache.clear()
 
@@ -61,7 +71,7 @@ def get_weather(lat, lng):
         return 25
 
 
-# 🔋 Battery prediction (15 min)
+# 🔋 Battery prediction
 def predict_battery(v):
     drain = v["speed"] * 0.01
     driver_penalty = v["driver_score"] * 0.02
@@ -90,8 +100,7 @@ def predict_time_to_empty(v):
     if total_drain == 0:
         return 999
 
-    time_left = v["battery"] / total_drain
-    return round(time_left, 2)
+    return round(v["battery"] / total_drain, 2)
 
 
 # 🚨 Alerts
@@ -104,19 +113,15 @@ def generate_alert(v):
 # 🔄 Update vehicles
 def update_vehicles():
     for v in vehicles:
-        # smooth movement
         v["lat"] += random.uniform(-0.0005, 0.0005)
         v["lng"] += random.uniform(-0.0005, 0.0005)
 
-        # simulate speed change
         v["speed"] += random.uniform(-5, 5)
         v["speed"] = max(10, min(v["speed"], 80))
 
-        # 🌦️ weather
         temp = get_weather(v["lat"], v["lng"])
         v["temp"] = temp
 
-        # battery drain
         drain = v["speed"] * 0.01
         driver_penalty = v["driver_score"] * 0.02
 
@@ -142,6 +147,26 @@ def get_status(predicted_battery):
         return "CRITICAL"
 
 
+# ⚡ SMART: Find nearest station (prefers FAST chargers)
+def find_nearest_station(lat, lng):
+    nearest = None
+    min_score = float("inf")
+
+    for station in charging_stations:
+        dist = math.sqrt((lat - station["lat"])**2 + (lng - station["lng"])**2)
+
+        # ⚡ Prefer fast chargers slightly
+        type_bonus = 0 if station["type"] == "fast" else 0.01
+
+        score = dist + type_bonus
+
+        if score < min_score:
+            min_score = score
+            nearest = station
+
+    return nearest, round(min_score, 4)
+
+
 # 🌐 Routes
 @app.get("/")
 def home():
@@ -159,4 +184,22 @@ def get_vehicles():
         v["time_to_empty"] = predict_time_to_empty(v)
         v["alert"] = generate_alert(v)
 
+        # ⚡ Smart recommendation
+        if v["battery"] < 25:
+            station, dist = find_nearest_station(v["lat"], v["lng"])
+            v["recommended_station"] = station
+            v["distance_to_station"] = dist
+        else:
+            v["recommended_station"] = None
+
     return vehicles
+
+
+# ⚡ Optional API
+@app.get("/recommend-charging")
+def recommend_charging(lat: float, lng: float):
+    station, dist = find_nearest_station(lat, lng)
+    return {
+        "station": station,
+        "distance": dist
+    }
