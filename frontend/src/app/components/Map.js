@@ -2,9 +2,13 @@
 
 import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet";
 
-export default function Map({ vehicles }) {
+export default function Map({ vehicles = [] }) {
 
-  // 🔋 + 🌡️ combined logic
+  // 🛑 SAFETY: prevent crash
+  if (!vehicles || vehicles.length === 0) {
+    return <p style={{ color: "gray" }}>Loading map...</p>;
+  }
+
   const getMarkerColor = (status, temp) => {
     if (status === "CRITICAL" || temp > 40) return "red";
     if (status === "WARNING" || temp > 35) return "yellow";
@@ -17,7 +21,6 @@ export default function Map({ vehicles }) {
     return "lightgreen";
   };
 
-  // 🔥 Pulsing effect
   const getRadius = (v) => {
     if (v.status === "CRITICAL") {
       return 12 + Math.random() * 4;
@@ -25,10 +28,26 @@ export default function Map({ vehicles }) {
     return 10;
   };
 
-  // ⚡ Extract recommended stations
-  const stations = vehicles
-    .filter(v => v.recommended_station)
-    .map(v => v.recommended_station);
+  // ⚡ SAFE unique stations
+  const uniqueStationsMap = new Map();
+
+  vehicles.forEach(v => {
+    if (v?.recommended_station) {
+      uniqueStationsMap.set(v.recommended_station.id, v.recommended_station);
+    }
+  });
+
+  const stations = Array.from(uniqueStationsMap.values());
+
+  const getStationColor = (s) => {
+    if (!s.capacity) return "blue";
+
+    const load = s.occupied / s.capacity;
+
+    if (load > 0.8) return "red";
+    if (load > 0.5) return "orange";
+    return "blue";
+  };
 
   return (
     <MapContainer
@@ -63,11 +82,15 @@ export default function Map({ vehicles }) {
                 </span>
               </p>
 
-              {/* ⚡ NEW: Recommended station info */}
               {v.recommended_station && (
-                <p style={{ color: "cyan", marginTop: "5px" }}>
-                  ⚡ Go to: {v.recommended_station.name} ({v.recommended_station.type})
-                </p>
+                <div style={{ marginTop: "6px" }}>
+                  <p style={{ color: "cyan" }}>
+                    ⚡ {v.recommended_station.name} ({v.recommended_station.type})
+                  </p>
+                  <p style={{ fontSize: "12px" }}>
+                    Load: {v.recommended_station.occupied}/{v.recommended_station.capacity}
+                  </p>
+                </div>
               )}
 
               {v.alert && (
@@ -80,19 +103,23 @@ export default function Map({ vehicles }) {
         </CircleMarker>
       ))}
 
-      {/* ⚡ CHARGING STATIONS (BLUE) */}
-      {stations.map((s, i) => (
+      {/* ⚡ STATIONS */}
+      {stations.map((s) => (
         <CircleMarker
-          key={"station-" + i}
+          key={"station-" + s.id}
           center={[s.lat, s.lng]}
-          radius={8}
+          radius={10}
           pathOptions={{
-            color: "blue",
+            color: getStationColor(s),
             fillOpacity: 0.8,
           }}
         >
           <Popup>
-            ⚡ {s.name} ({s.type})
+            <div>
+              <p><b>⚡ {s.name}</b></p>
+              <p>Type: {s.type}</p>
+              <p>Load: {s.occupied}/{s.capacity}</p>
+            </div>
           </Popup>
         </CircleMarker>
       ))}

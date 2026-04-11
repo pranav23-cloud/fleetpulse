@@ -7,21 +7,32 @@ const Map = dynamic(() => import("./components/Map"), { ssr: false });
 
 export default function Home() {
   const [vehicles, setVehicles] = useState([]);
+  const [leaders, setLeaders] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await fetch("https://fleetpulse-backend-c04w.onrender.com/vehicles");
+        // ✅ Vehicles API (safe)
+        const res1 = await fetch("https://fleetpulse-backend-c04w.onrender.com/vehicles");
 
-        if (!res.ok) {
-          throw new Error("API failed");
+        if (res1.ok) {
+          const data1 = await res1.json();
+          setVehicles(data1);
+        } else {
+          console.error("Vehicles API failed");
         }
 
-        const data = await res.json();
-        console.log("DATA:", data); // debug
+        // ✅ Leaderboard API (safe)
+        const res2 = await fetch("https://fleetpulse-backend-c04w.onrender.com/driver-leaderboard");
 
-        setVehicles(data);
+        if (res2.ok) {
+          const data2 = await res2.json();
+          setLeaders(data2);
+        } else {
+          console.error("Leaderboard API failed");
+        }
+
         setLoading(false);
       } catch (error) {
         console.error("Fetch error:", error);
@@ -54,7 +65,6 @@ export default function Home() {
         FleetPulse Dashboard
       </h1>
 
-      {/* 🔄 Loading State (VERY IMPORTANT FOR MOBILE) */}
       {loading ? (
         <p className="text-gray-400">Loading vehicles...</p>
       ) : (
@@ -82,6 +92,30 @@ export default function Home() {
               <h2 className="text-2xl font-bold text-yellow-400">{alerts}</h2>
             </div>
 
+          </div>
+
+          {/* 🏆 Driver Leaderboard */}
+          <div className="mb-6">
+            <h2 className="text-xl font-semibold mb-3">Top Drivers</h2>
+
+            {leaders.length === 0 ? (
+              <p className="text-gray-400">No leaderboard data</p>
+            ) : (
+              leaders.slice(0, 5).map((d, i) => (
+                <div
+                  key={i}
+                  className="bg-gray-900 p-4 rounded-xl mb-2 border border-gray-800"
+                >
+                  <p className="font-semibold">🚗 Vehicle {d.id}</p>
+                  <p className="text-sm text-gray-400">
+                    Efficiency: {d.efficiency}
+                  </p>
+                  <p className="text-sm text-gray-400">
+                    Driver Score: {d.driver_score}
+                  </p>
+                </div>
+              ))
+            )}
           </div>
 
           {/* Alerts Section */}
