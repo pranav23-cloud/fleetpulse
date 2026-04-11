@@ -108,7 +108,7 @@ def generate_alert(v):
         return f"Vehicle {v['id']} needs charging in {round(v['time_to_empty'])} min"
     return None
 
-# ⚠️ Charging urgency (NEW)
+# ⚠️ Charging urgency
 def get_urgency(battery):
     if battery < 10:
         return "HIGH"
@@ -153,7 +153,7 @@ def get_status(predicted_battery):
         return "WARNING"
     return "CRITICAL"
 
-# ⚡ Best station (distance + type + load)
+# ⚡ Best station
 def find_best_station(lat, lng):
     best = None
     best_score = float("inf")
@@ -202,19 +202,24 @@ def get_vehicles():
 
     return vehicles
 
-# 🏆 Leaderboard
+# 🏆 Leaderboard (FIXED)
 @app.get("/driver-leaderboard")
 def driver_leaderboard():
+    update_vehicles()  # ✅ FIX
+
     leaderboard = []
 
     for v in vehicles:
+        predicted = predict_battery(v)
+        status = get_status(predicted)
+
         efficiency = round((v["battery"] / (v["speed"] + 1)) * 10, 2)
 
         leaderboard.append({
             "id": v["id"],
             "driver_score": v["driver_score"],
             "efficiency": efficiency,
-            "status": v.get("status", "UNKNOWN")
+            "status": status   # ✅ FIXED
         })
 
     leaderboard.sort(key=lambda x: x["efficiency"], reverse=True)
