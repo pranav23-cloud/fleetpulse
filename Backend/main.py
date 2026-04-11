@@ -33,16 +33,21 @@ for i in range(20):
         "driver_score": random.randint(1, 10)
     })
 
-# ⚡ Generate MANY charging stations (BETTER)
+# ⚡ Charging stations with LOAD
 charging_stations = []
 
 for i in range(15):
+    capacity = random.randint(5, 15)
+    occupied = random.randint(0, capacity)
+
     charging_stations.append({
         "id": i,
         "name": f"Station {i}",
         "lat": 12.97 + random.uniform(-0.06, 0.06),
         "lng": 77.59 + random.uniform(-0.06, 0.06),
-        "type": random.choice(["fast", "slow"])
+        "type": random.choice(["fast", "slow"]),
+        "capacity": capacity,
+        "occupied": occupied
     })
 
 # 🌦️ Weather cache
@@ -110,7 +115,7 @@ def generate_alert(v):
     return None
 
 
-# 🔄 Update vehicles
+# 🔄 Update vehicles + simulate station load
 def update_vehicles():
     for v in vehicles:
         v["lat"] += random.uniform(-0.0005, 0.0005)
@@ -136,6 +141,11 @@ def update_vehicles():
         if v["battery"] < 0:
             v["battery"] = 0
 
+    # ⚡ simulate station usage
+    for s in charging_stations:
+        change = random.randint(-1, 1)
+        s["occupied"] = max(0, min(s["capacity"], s["occupied"] + change))
+
 
 # 🟢 Status
 def get_status(predicted_battery):
@@ -147,24 +157,28 @@ def get_status(predicted_battery):
         return "CRITICAL"
 
 
-# ⚡ SMART: Find nearest station (prefers FAST chargers)
-def find_nearest_station(lat, lng):
-    nearest = None
-    min_score = float("inf")
+# ⚡ SMART: Best station (distance + type + load)
+def find_best_station(lat, lng):
+    best = None
+    best_score = float("inf")
 
     for station in charging_stations:
         dist = math.sqrt((lat - station["lat"])**2 + (lng - station["lng"])**2)
 
-        # ⚡ Prefer fast chargers slightly
-        type_bonus = 0 if station["type"] == "fast" else 0.01
+        # ⚡ fast charger preference
+        type_bonus = 0 if station["type"] == "fast" else 0.02
 
-        score = dist + type_bonus
+        # 📊 load penalty
+        load_ratio = station["occupied"] / station["capacity"]
+        load_penalty = load_ratio * 0.05
 
-        if score < min_score:
-            min_score = score
-            nearest = station
+        score = dist + type_bonus + load_penalty
 
-    return nearest, round(min_score, 4)
+        if score < best_score:
+            best_score = score
+            best = station
+
+    return best, round(best_score, 4)
 
 
 # 🌐 Routes
@@ -186,7 +200,7 @@ def get_vehicles():
 
         # ⚡ Smart recommendation
         if v["battery"] < 25:
-            station, dist = find_nearest_station(v["lat"], v["lng"])
+            station, dist = find_best_station(v["lat"], v["lng"])
             v["recommended_station"] = station
             v["distance_to_station"] = dist
         else:
@@ -198,7 +212,7 @@ def get_vehicles():
 # ⚡ Optional API
 @app.get("/recommend-charging")
 def recommend_charging(lat: float, lng: float):
-    station, dist = find_nearest_station(lat, lng)
+    station, dist = find_best_station(lat, lng)
     return {
         "station": station,
         "distance": dist
