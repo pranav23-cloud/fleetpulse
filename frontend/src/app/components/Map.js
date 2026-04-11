@@ -1,6 +1,7 @@
 "use client";
 
-import { MapContainer, TileLayer, CircleMarker, Popup} from "react-leaflet";
+import { useState, useEffect } from "react";
+import { MapContainer, TileLayer, CircleMarker, Popup, Polyline } from "react-leaflet";
 
 export default function Map({ vehicles = [] }) {
 
@@ -9,9 +10,52 @@ export default function Map({ vehicles = [] }) {
     return <p style={{ color: "gray" }}>Loading map...</p>;
   }
 
+  // 🚀 ROUTES STATE
+  const [routes, setRoutes] = useState({});
+
+  // 🎯 Fetch real routes from OSRM
+  useEffect(() => {
+    const fetchRoutes = async () => {
+      let newRoutes = {};
+
+      for (let v of vehicles) {
+        if (!v.recommended_station) continue;
+
+        try {
+          const url = `https://router.project-osrm.org/route/v1/driving/${v.lng},${v.lat};${v.recommended_station.lng},${v.recommended_station.lat}?overview=full&geometries=geojson`;
+
+          const res = await fetch(url);
+          const data = await res.json();
+
+          if (data.routes && data.routes.length > 0) {
+            newRoutes[v.id] = data.routes[0].geometry.coordinates.map(coord => [
+              coord[1], // lat
+              coord[0], // lng
+            ]);
+          }
+        } catch (err) {
+          console.error("Route fetch error:", err);
+        }
+      }
+
+      setRoutes(newRoutes);
+    };
+
+    if (vehicles.length > 0) {
+      fetchRoutes();
+    }
+  }, [vehicles]);
+
+  // 🎨 Marker color
   const getMarkerColor = (status, temp) => {
     if (status === "CRITICAL" || temp > 40) return "red";
     if (status === "WARNING" || temp > 35) return "yellow";
+    return "green";
+  };
+
+  const getRouteColor = (status) => {
+    if (status === "CRITICAL") return "red";
+    if (status === "WARNING") return "orange";
     return "green";
   };
 
@@ -28,7 +72,7 @@ export default function Map({ vehicles = [] }) {
     return 10;
   };
 
-  // ⚡ FIX: use global Map safely
+  // ⚡ Unique stations
   const uniqueStationsMap = new globalThis.Map();
 
   vehicles.forEach(v => {
@@ -102,6 +146,24 @@ export default function Map({ vehicles = [] }) {
           </Popup>
         </CircleMarker>
       ))}
+
+      {/* 🚀 REAL ROUTES */}
+      {Object.keys(routes).map((id) => {
+        const v = vehicles.find(v => v.id == id);
+        if (!v) return null;
+
+        return (
+          <Polyline
+            key={"route-" + id}
+            positions={routes[id]}
+            pathOptions={{
+              color: getRouteColor(v.status),
+              weight: v.status === "CRITICAL" ? 5 : 3,
+              opacity: 0.8,
+            }}
+          />
+        );
+      })}
 
       {/* ⚡ STATIONS */}
       {stations.map((s) => (
