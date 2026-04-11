@@ -1,10 +1,10 @@
 "use client";
 
-import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet";
+import { MapContainer, TileLayer, CircleMarker, Popup} from "react-leaflet";
 
 export default function Map({ vehicles = [] }) {
 
-  // 🛑 SAFETY: prevent crash
+  // 🛑 SAFETY
   if (!vehicles || vehicles.length === 0) {
     return <p style={{ color: "gray" }}>Loading map...</p>;
   }
@@ -28,8 +28,8 @@ export default function Map({ vehicles = [] }) {
     return 10;
   };
 
-  // ⚡ SAFE unique stations
-  const uniqueStationsMap = new Map();
+  // ⚡ FIX: use global Map safely
+  const uniqueStationsMap = new globalThis.Map();
 
   vehicles.forEach(v => {
     if (v?.recommended_station) {
@@ -58,7 +58,7 @@ export default function Map({ vehicles = [] }) {
       <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
 
       {/* 🚗 VEHICLES */}
-      {vehicles.map((v) => (
+      {(vehicles || []).map((v) => (
         <CircleMarker
           key={v.id}
           center={[v.lat, v.lng]}
