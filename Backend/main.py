@@ -20,9 +20,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 🔥 Generate 20 dynamic vehicles
+# 🔥 Generate vehicles
 vehicles = []
-
 for i in range(20):
     vehicles.append({
         "id": i,
@@ -33,9 +32,8 @@ for i in range(20):
         "driver_score": random.randint(1, 10)
     })
 
-# ⚡ Charging stations with LOAD
+# ⚡ Charging stations
 charging_stations = []
-
 for i in range(15):
     capacity = random.randint(5, 15)
     occupied = random.randint(0, capacity)
@@ -75,12 +73,10 @@ def get_weather(lat, lng):
     except:
         return 25
 
-
 # 🔋 Battery prediction
 def predict_battery(v):
     drain = v["speed"] * 0.01
     driver_penalty = v["driver_score"] * 0.02
-
     temp = v.get("temp", 25)
 
     weather_penalty = 0
@@ -90,10 +86,9 @@ def predict_battery(v):
         weather_penalty = 0.03
 
     total_drain = drain + driver_penalty + weather_penalty
-
     predicted = v["battery"] - (total_drain * 15)
-    return round(max(predicted, 0), 2)
 
+    return round(max(predicted, 0), 2)
 
 # ⏱️ Time-to-empty
 def predict_time_to_empty(v):
@@ -102,11 +97,10 @@ def predict_time_to_empty(v):
 
     total_drain = drain + driver_penalty
 
-    if total_drain == 0:
+    if total_drain <= 0:
         return 999
 
     return round(v["battery"] / total_drain, 2)
-
 
 # 🚨 Alerts
 def generate_alert(v):
@@ -114,8 +108,15 @@ def generate_alert(v):
         return f"Vehicle {v['id']} needs charging in {round(v['time_to_empty'])} min"
     return None
 
+# ⚠️ Charging urgency (NEW)
+def get_urgency(battery):
+    if battery < 10:
+        return "HIGH"
+    elif battery < 25:
+        return "MEDIUM"
+    return "LOW"
 
-# 🔄 Update vehicles + simulate station load
+# 🔄 Update vehicles + stations
 def update_vehicles():
     for v in vehicles:
         v["lat"] += random.uniform(-0.0005, 0.0005)
@@ -137,15 +138,12 @@ def update_vehicles():
             weather_penalty = 0.03
 
         v["battery"] -= (drain + driver_penalty + weather_penalty)
+        v["battery"] = max(v["battery"], 0)
 
-        if v["battery"] < 0:
-            v["battery"] = 0
-
-    # ⚡ simulate station usage
+    # ⚡ simulate station load
     for s in charging_stations:
         change = random.randint(-1, 1)
         s["occupied"] = max(0, min(s["capacity"], s["occupied"] + change))
-
 
 # 🟢 Status
 def get_status(predicted_battery):
@@ -153,11 +151,9 @@ def get_status(predicted_battery):
         return "SAFE"
     elif predicted_battery > 15:
         return "WARNING"
-    else:
-        return "CRITICAL"
+    return "CRITICAL"
 
-
-# ⚡ SMART: Best station (distance + type + load)
+# ⚡ Best station (distance + type + load)
 def find_best_station(lat, lng):
     best = None
     best_score = float("inf")
@@ -165,11 +161,8 @@ def find_best_station(lat, lng):
     for station in charging_stations:
         dist = math.sqrt((lat - station["lat"])**2 + (lng - station["lng"])**2)
 
-        # ⚡ fast charger preference
         type_bonus = 0 if station["type"] == "fast" else 0.02
-
-        # 📊 load penalty
-        load_ratio = station["occupied"] / station["capacity"]
+        load_ratio = station["occupied"] / max(station["capacity"], 1)
         load_penalty = load_ratio * 0.05
 
         score = dist + type_bonus + load_penalty
@@ -180,12 +173,10 @@ def find_best_station(lat, lng):
 
     return best, round(best_score, 4)
 
-
 # 🌐 Routes
 @app.get("/")
 def home():
     return {"message": "Backend running 🚀"}
-
 
 @app.get("/vehicles")
 def get_vehicles():
@@ -197,17 +188,37 @@ def get_vehicles():
         v["status"] = get_status(predicted)
         v["time_to_empty"] = predict_time_to_empty(v)
         v["alert"] = generate_alert(v)
+        v["urgency"] = get_urgency(v["battery"])
 
-        # ⚡ Smart recommendation
         if v["battery"] < 25:
             station, dist = find_best_station(v["lat"], v["lng"])
             v["recommended_station"] = station
             v["distance_to_station"] = dist
+
+            if station:
+                v["station_availability"] = f"{station['capacity'] - station['occupied']} slots free"
         else:
             v["recommended_station"] = None
 
     return vehicles
 
+# 🏆 Leaderboard
+@app.get("/driver-leaderboard")
+def driver_leaderboard():
+    leaderboard = []
+
+    for v in vehicles:
+        efficiency = round((v["battery"] / (v["speed"] + 1)) * 10, 2)
+
+        leaderboard.append({
+            "id": v["id"],
+            "driver_score": v["driver_score"],
+            "efficiency": efficiency,
+            "status": v.get("status", "UNKNOWN")
+        })
+
+    leaderboard.sort(key=lambda x: x["efficiency"], reverse=True)
+    return leaderboard
 
 # ⚡ Optional API
 @app.get("/recommend-charging")
